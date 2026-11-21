@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NIGHT WATCH — Vigilancia Nocturna</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="webgl-container"></div>
+
+    <!-- Retícula e Interfaz HUD Base (Oculta mientras se está en el Menú Principal) -->
+    <div id="hud" class="hidden">
+      <div id="reticle"></div>
+
+      <div id="top-left-hud">
+        <div class="hud-clock" id="hud-clock">12:00 AM</div>
+        <div class="hud-sub" id="hud-sector">SECTOR: OFICINA PRINCIPAL</div>
+      </div>
+
+      <div id="hour-banner" class="hour-banner hidden">01:00 AM — ACTIVIDAD EN AUMENTO</div>
+
+      <div id="bottom-left-hud">
+        <div class="hud-stat">
+          <span class="stat-label">ENERGÍA CASA</span>
+          <span class="stat-value" id="hud-power-val">100.0%</span>
+        </div>
+        <div class="usage-bars" id="hud-usage-bars" title="Consumo actual">
+          <span class="bar active"></span>
+          <span class="bar"></span>
+          <span class="bar"></span>
+          <span class="bar"></span>
+        </div>
+        <div class="hud-stat" style="margin-top: 8px;">
+          <span class="stat-label">LINTERNA [F]</span>
+          <div class="battery-bar-bg">
+            <div id="hud-flashlight-fill" class="battery-bar-fill"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="bottom-right-hud">
+        <div class="controls-hint">
+          <span>[MOUSE] Mirar / Apuntar</span>
+          <span>[CLIC / E] Puerta / Ducto / Fusibles</span>
+          <span>[CLIC / Q] Pulso Luz Pasillo</span>
+          <span>[C] Monitor CCTV</span>
+          <span>[F] Linterna</span>
+          <span>[ESPACIO / S] Girar 180° (Panel)</span>
+          <span>[P / ESC] Pausa</span>
+          <span>[F1] Debug</span>
+        </div>
+      </div>
+
+      <div id="interaction-prompt" class="hidden"></div>
+    </div>
+
+    <!-- Interfaz 2D Superpuesta del Monitor CCTV (Regla 6.1) -->
+    <div id="cctv-overlay" class="hidden">
+      <canvas id="cctv-static-canvas"></canvas>
+      <div class="crt-scanlines"></div>
+      <div class="crt-vignette"></div>
+
+      <div class="cctv-top-bar">
+        <div class="cctv-rec">
+          <span class="rec-dot"></span>
+          <span>REC // NIGHT-VISION IR</span>
+        </div>
+        <div id="cctv-cam-title" class="cctv-cam-title">CAM 01 — PORCHE DELANTERO</div>
+        <div class="cctv-signal">SEÑAL: 98% [60Hz]</div>
+      </div>
+
+      <div class="cctv-actions-left">
+        <button id="cctv-porch-light-btn" class="cctv-action-btn">
+          [MANTENER E / CLICK] REFLECTOR PORCHE (+0.40%/s)
+        </button>
+        <button id="cctv-close-btn" class="cctv-action-btn close">
+          [C] SALIR DEL MONITOR
+        </button>
+      </div>
+
+      <!-- Mapa Táctico Esquemático (Blueprint) -->
+      <div class="cctv-blueprint-box">
+        <div class="blueprint-header">MAPA TÁCTICO — SELECCIÓN DE CANAL [1-4]</div>
+        <div class="blueprint-map">
+          <!-- Esquema arquitectónico de la casa -->
+          <div class="bp-room bp-porch">PORCHE NORTE</div>
+          <div class="bp-room bp-hallway">PASILLO OESTE</div>
+          <div class="bp-room bp-office">OFICINA [TÚ]</div>
+          <div class="bp-room bp-kitchen">COCINA / DUCTO</div>
+          <div class="bp-room bp-yard">BOSQUE ESTE</div>
+
+          <!-- Botones de cámaras -->
+          <button class="map-cam-btn active" data-cam="CAM 01" style="top: 12%; left: 38%;">
+            CAM 01
+          </button>
+          <button class="map-cam-btn" data-cam="CAM 04" style="top: 46%; left: 10%;">
+            CAM 04
+          </button>
+          <button class="map-cam-btn" data-cam="CAM 02" style="top: 48%; left: 66%;">
+            CAM 02
+          </button>
+          <button class="map-cam-btn" data-cam="CAM 03" style="top: 18%; left: 74%;">
+            CAM 03
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pantalla Principal / Inicio Diegética CRT (Módulo 4.4 - v1.0.0) -->
+    <div id="pointer-lock-overlay">
+      <div class="crt-scanlines"></div>
+
+      <!-- Vista Principal del Menú -->
+      <div id="menu-main-view" class="overlay-box title-terminal">
+        <div class="terminal-top-status">
+          <span>SYS.VER // 1.0.0</span>
+          <span class="status-online">● SISTEMA EN ESPERA</span>
+          <span>TURNO: NOCHE 1 (12:00 AM — 06:00 AM)</span>
+        </div>
+
+        <h1>NIGHT WATCH</h1>
+        <p class="subtitle">PROTOCOLO DE CONTENCIÓN Y VIGILANCIA RURAL</p>
+
+        <div class="main-menu-actions">
+          <button id="start-btn" class="menu-primary-btn">
+            ▶ NUEVA PARTIDA (NOCHE 1)
+          </button>
+          <button id="open-options-btn" class="menu-secondary-btn">
+            ⚙ OPCIONES Y CONTROLES
+          </button>
+        </div>
+
+        <div class="dossier-grid">
+          <div class="dossier-card">
+            <div class="dossier-name">01 // EL OBSERVADOR</div>
+            <div class="dossier-desc">
+              Acecha en el bosque (<strong>CAM 03 / CAM 01</strong>) y golpea la ventana derecha (<em>tap... tap</em>). Alúmbralo con la <strong>Linterna [F]</strong> o usa el <strong>Reflector [E]</strong> en CAM 01.
+            </div>
+          </div>
+          <div class="dossier-card">
+            <div class="dossier-name">02 // EL REPTANTE</div>
+            <div class="dossier-desc">
+              Se infiltra por el ducto de la cocina (<strong>CAM 02</strong>). Escucha sus arañazos metálicos a la derecha y cierra la <strong>Compuerta Neumática [Clic / E]</strong>.
+            </div>
+          </div>
+          <div class="dossier-card">
+            <div class="dossier-name">03 // EL INTRUSO</div>
+            <div class="dossier-desc">
+              Avanza por el pasillo izquierdo (<strong>CAM 04</strong>) causando estática y crujidos. Verifica el umbral con <strong>Luz de Pasillo [Q]</strong> y cierra la <strong>Puerta Magnética [Clic / E]</strong>.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Vista de Opciones del Menú Principal -->
+      <div id="menu-options-view" class="overlay-box title-terminal hidden">
+        <div class="terminal-top-status">
+          <span>SYS.CONFIG // AUDIO &amp; INPUT</span>
+          <span class="status-online">● AJUSTES PERSISTENTES</span>
+          <span>MEMORIA LOCAL</span>
+        </div>
+
+        <h1>OPCIONES</h1>
+        <p class="subtitle">CALIBRACIÓN DE AUDIO ESPACIAL Y CONTROLES DE CABINA</p>
+
+        <div class="volume-settings">
+          <div class="vol-row">
+            <label for="menu-vol-master">VOLUMEN MAESTRO</label>
+            <input type="range" id="menu-vol-master" min="0" max="100" value="80" />
+            <span id="menu-vol-master-val">80%</span>
+          </div>
+          <div class="vol-row">
+            <label for="menu-vol-sfx">EFECTOS (SFX 3D)</label>
+            <input type="range" id="menu-vol-sfx" min="0" max="100" value="85" />
+            <span id="menu-vol-sfx-val">85%</span>
+          </div>
+          <div class="vol-row">
+            <label for="menu-vol-ambient">AMBIENTE NOCTURNO</label>
+            <input type="range" id="menu-vol-ambient" min="0" max="100" value="55" />
+            <span id="menu-vol-ambient-val">55%</span>
+          </div>
+          <div class="vol-row">
+            <label for="menu-mouse-sens">SENSIBILIDAD RATÓN</label>
+            <input type="range" id="menu-mouse-sens" min="30" max="200" value="100" />
+            <span id="menu-mouse-sens-val">100%</span>
+          </div>
+        </div>
+
+        <div class="instructions-grid">
+          <div><strong>RATÓN</strong> — Mirar / Apuntar a botones y palancas</div>
+          <div><strong>TECLA C</strong> — Abrir / Cerrar Monitor CCTV (Canales 1 al 4)</div>
+          <div><strong>TECLA F</strong> — Encender / Apagar Linterna Táctica</div>
+          <div><strong>CLIC / TECLA E</strong> — Accionar Puerta Magnética, Compuerta Ducto o Fusibles</div>
+          <div><strong>CLIC / TECLA Q</strong> — Pulso rápido de Luz de Pasillo</div>
+          <div><strong>ESPACIO / S</strong> — Girar 180° hacia el Panel Eléctrico Trasero</div>
+          <div><strong>P / ESC / F1</strong> — Menú de Pausa / Panel de Telemetría Debug</div>
+        </div>
+
+        <button id="close-options-btn" class="menu-primary-btn">
+          ← VOLVER AL MENÚ PRINCIPAL
+        </button>
+      </div>
+    </div>
+
+    <!-- Menú de Pausa (Detiene la simulación por completo) -->
+    <div id="pause-overlay" class="hidden">
+      <div class="overlay-box pause-box">
+        <h1>JUEGO EN PAUSA</h1>
+        <p class="subtitle">SIMULACIÓN Y RELOJ NOCTURNO DETENIDOS</p>
+
+        <div class="volume-settings">
+          <div class="vol-row">
+            <label for="vol-master">VOLUMEN MAESTRO</label>
+            <input type="range" id="vol-master" min="0" max="100" value="80" />
+            <span id="vol-master-val">80%</span>
+          </div>
+          <div class="vol-row">
+            <label for="vol-sfx">EFECTOS (SFX 3D)</label>
+            <input type="range" id="vol-sfx" min="0" max="100" value="85" />
+            <span id="vol-sfx-val">85%</span>
+          </div>
+          <div class="vol-row">
+            <label for="vol-ambient">AMBIENTE NOCTURNO</label>
+            <input type="range" id="vol-ambient" min="0" max="100" value="55" />
+            <span id="vol-ambient-val">55%</span>
+          </div>
+        </div>
+
+        <div class="pause-actions">
+          <button id="resume-btn">REANUDAR PARTIDA [P]</button>
+          <button id="pause-restart-btn" class="secondary-btn">REINICIAR NOCHE (12:00 AM)</button>
+          <button id="pause-mainmenu-btn" class="secondary-btn">VOLVER AL MENÚ PRINCIPAL</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Superposición de Fin de Partida (Jumpscare / Victoria 6 AM) -->
+    <div id="end-screen-overlay" class="hidden">
+      <div class="overlay-box end-box">
+        <h1 id="end-screen-title">CONEXIÓN PERDIDA</h1>
+        <p id="end-screen-reason" class="subtitle">LA CABINA HA CAÍDO</p>
+        <div class="pause-actions">
+          <button id="restart-btn">REINTENTAR NOCHE 1 (12:00 AM)</button>
+          <button id="end-mainmenu-btn" class="secondary-btn">VOLVER AL MENÚ PRINCIPAL</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Panel de Depuración (F1) -->
+    <div id="debug-panel" class="hidden">
+      <div class="debug-header">
+        <span>DEBUG TELEMETRY [F1]</span>
+        <span id="debug-fps">60 FPS</span>
+      </div>
+      <div class="debug-body">
+        <div class="debug-row">
+          <span>Draw Calls / Geometrías:</span>
+          <span id="debug-drawcalls">0 / 0</span>
+        </div>
+        <div class="debug-row">
+          <span>Cámara Yaw / Pitch:</span>
+          <span id="debug-cam-angles">0° / 0°</span>
+        </div>
+        <div class="debug-row">
+          <span>Estado Vista:</span>
+          <span id="debug-view-state">FRONT</span>
+        </div>
+        <div class="debug-row">
+          <span>Linterna:</span>
+          <span id="debug-flashlight-state">OFF (100%)</span>
+        </div>
+        <div class="debug-row">
+          <span>Consumo Red:</span>
+          <span id="debug-drain-rate">0.08%/s (N1)</span>
+        </div>
+        <hr />
+        <div class="debug-section-title">ESTADO ENTIDADES ALIENÍGENAS</div>
+        <div class="debug-row">
+          <span>Observador (Ventana):</span>
+          <span id="debug-obs-state">IDLE</span>
+        </div>
+        <div class="debug-row">
+          <span>Reptante (Ducto):</span>
+          <span id="debug-crw-state">IDLE</span>
+        </div>
+        <div class="debug-row">
+          <span>Intruso (Pasillo):</span>
+          <span id="debug-int-state">IDLE</span>
+        </div>
+        <div class="debug-actions" style="margin-top: 4px;">
+          <button id="dbg-btn-toggle-entities" class="active-toggle">
+            IA Entidades: ON
+          </button>
+        </div>
+        <div class="debug-actions">
+          <button id="dbg-btn-atk-obs" title="Forzar ataque en ventana">Atq. Obs</button>
+          <button id="dbg-btn-atk-crw" title="Forzar ataque en rejilla">Atq. Rept</button>
+          <button id="dbg-btn-atk-int" title="Forzar ataque en puerta">Atq. Intr</button>
+        </div>
+        <hr />
+        <div class="debug-section-title">RELOJ Y ENERGÍA</div>
+        <div class="debug-actions">
+          <button id="dbg-btn-1am">1:00 AM</button>
+          <button id="dbg-btn-3am">3:00 AM</button>
+          <button id="dbg-btn-559am">5:59 AM</button>
+        </div>
+        <div class="debug-actions">
+          <button id="dbg-btn-inf-power">Energía Inf: OFF</button>
+          <button id="dbg-btn-trip-breaker">Saltar Fusibles</button>
+          <button id="dbg-btn-blackout">Forzar 0%</button>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
+
